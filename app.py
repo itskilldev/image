@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import base64
 from io import BytesIO
@@ -22,7 +23,6 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
 .main-title {
     font-size: 42px;
     font-weight: 700;
@@ -35,11 +35,6 @@ st.markdown("""
     color: #777;
     margin-bottom: 30px;
 }
-
-.generate-button {
-    width: 100%;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,7 +95,8 @@ with st.sidebar:
         "Image Size",
         [
             "1K",
-            "2K"
+            "2K",
+            "4K"
         ],
         index=0
     )
@@ -108,8 +104,8 @@ with st.sidebar:
     st.divider()
 
     st.info(
-        "Image generation is performed through the Gemini API. "
-        "Your Streamlit server does not load a local diffusion model."
+        "Images are generated through the Gemini API. "
+        "The image-generation model does not run locally on your CPU."
     )
 
 
@@ -120,10 +116,10 @@ with st.sidebar:
 prompt = st.text_area(
     "Describe the image you want",
     placeholder=(
-        "Example: A photorealistic portrait of a young woman "
+        "Example: A photorealistic portrait of a woman "
         "wearing an elegant traditional outfit, natural lighting, "
-        "professional photography, detailed skin texture, "
-        "shallow depth of field"
+        "professional photography, realistic details, "
+        "shallow depth of field."
     ),
     height=150
 )
@@ -159,22 +155,26 @@ if generate:
                 input=prompt,
                 response_format={
                     "type": "image",
-                    "mime_type": "image/png",
+                    "mime_type": "image/jpeg",
                     "aspect_ratio": aspect_ratio,
                     "image_size": image_size
                 }
             )
 
+            # Check whether an image was returned
             if interaction.output_image:
 
+                # Decode Base64 image
                 image_data = base64.b64decode(
                     interaction.output_image.data
                 )
 
+                # Open image
                 image = Image.open(
                     BytesIO(image_data)
                 )
 
+                # Store in session
                 st.session_state["generated_image"] = image
 
             else:
@@ -191,7 +191,7 @@ if generate:
 
 
 # --------------------------------------------------
-# DISPLAY RESULT
+# DISPLAY GENERATED IMAGE
 # --------------------------------------------------
 
 if "generated_image" in st.session_state:
@@ -205,18 +205,24 @@ if "generated_image" in st.session_state:
         use_container_width=True
     )
 
-    # Convert image to PNG bytes
+
+    # --------------------------------------------------
+    # DOWNLOAD IMAGE
+    # --------------------------------------------------
+
     buffer = BytesIO()
 
     image.save(
         buffer,
-        format="PNG"
+        format="JPEG",
+        quality=95
     )
 
     st.download_button(
         label="⬇️ Download Image",
         data=buffer.getvalue(),
-        file_name="generated_image.png",
-        mime="image/png",
+        file_name="generated_image.jpg",
+        mime="image/jpeg",
         use_container_width=True
     )
+```
