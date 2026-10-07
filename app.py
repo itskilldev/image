@@ -225,4 +225,4 @@ if "generated_image" in st.session_state:
         mime="image/jpeg",
         use_container_width=True
     )
-```
+
