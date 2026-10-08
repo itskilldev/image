@@ -59,11 +59,11 @@ st.markdown(
 
 
 # =========================================================
-# GEMINI API KEY
+# GET API KEY
 # =========================================================
 
 try:
-    api_key = st.secrets["GEMINI_API_KEY"]
+    API_KEY = st.secrets["GEMINI_API_KEY"]
 
 except Exception:
     st.error(
@@ -73,24 +73,23 @@ except Exception:
 
 
 # =========================================================
-# GEMINI CLIENT
+# CREATE GEMINI CLIENT
 # =========================================================
 
 try:
     client = genai.Client(
-        api_key=api_key
+        api_key=API_KEY
     )
 
 except Exception as e:
     st.error(
-        f"Failed to initialize Gemini client: "
-        f"{type(e).__name__}: {e}"
+        f"Gemini client error: {type(e).__name__}: {e}"
     )
     st.stop()
 
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR SETTINGS
 # =========================================================
 
 with st.sidebar:
@@ -106,17 +105,15 @@ with st.sidebar:
             "4:3",
             "3:4",
         ],
+        index=0,
     )
 
-    # Start with 1K for reliable testing
-    image_size = "1K"
-
     st.info(
-        "Image generation is powered by the Gemini API."
+        "Powered by Gemini 3.1 Flash Image"
     )
 
     st.caption(
-        "Image size is currently fixed to 1K for faster generation."
+        "Generation quality: 1K"
     )
 
 
@@ -127,8 +124,10 @@ with st.sidebar:
 prompt = st.text_area(
     "Describe the image you want",
     placeholder=(
-        "A realistic road through green mountains, "
-        "natural daylight, professional photography..."
+        "A realistic photograph of a beautiful "
+        "mountain landscape during golden hour, "
+        "natural lighting, highly detailed, "
+        "professional photography"
     ),
     height=150,
 )
@@ -138,14 +137,17 @@ prompt = st.text_area(
 # GENERATE BUTTON
 # =========================================================
 
-if st.button(
+generate = st.button(
     "✨ Generate Image",
     type="primary",
     use_container_width=True,
-):
+)
+
+
+if generate:
 
     # -----------------------------------------------------
-    # CHECK PROMPT
+    # VALIDATE PROMPT
     # -----------------------------------------------------
 
     if not prompt.strip():
@@ -158,214 +160,135 @@ if st.button(
 
 
     # -----------------------------------------------------
-    # STATUS
+    # GENERATION STATUS
     # -----------------------------------------------------
 
-    status = st.status(
-        "Starting image generation...",
+    with st.status(
+        "Generating image...",
         expanded=True,
-    )
+    ) as status:
 
+        try:
 
-    try:
-
-        # -------------------------------------------------
-        # STEP 1
-        # -------------------------------------------------
-
-        status.write(
-            "✅ Button clicked."
-        )
-
-        status.write(
-            "⏳ Sending request to Gemini API..."
-        )
-
-
-        # -------------------------------------------------
-        # STEP 2 - API REQUEST
-        # -------------------------------------------------
-
-        interaction = client.interactions.create(
-            model="gemini-3.1-flash-image",
-
-            input=prompt.strip(),
-
-            response_format={
-                "type": "image",
-                "aspect_ratio": aspect_ratio,
-                "image_size": image_size,
-            },
-        )
-
-
-        # -------------------------------------------------
-        # STEP 3
-        # -------------------------------------------------
-
-        status.write(
-            "✅ Gemini API response received."
-        )
-
-
-        # -------------------------------------------------
-        # GET IMAGE OUTPUT
-        # -------------------------------------------------
-
-        output = getattr(
-            interaction,
-            "output_image",
-            None,
-        )
-
-
-        # -------------------------------------------------
-        # NO IMAGE
-        # -------------------------------------------------
-
-        if output is None:
-
-            status.update(
-                label="❌ No image returned",
-                state="error",
+            status.write(
+                "Connecting to Gemini API..."
             )
 
-            st.error(
-                "Gemini returned no output_image."
+
+            # -------------------------------------------------
+            # GEMINI IMAGE GENERATION
+            # -------------------------------------------------
+
+            response = client.interactions.create(
+                model="gemini-3.1-flash-image",
+                input=prompt.strip(),
+                response_format={
+                    "type": "image",
+                    "aspect_ratio": aspect_ratio,
+                    "image_size": "1K",
+                },
             )
 
-            output_text = getattr(
-                interaction,
-                "output_text",
+
+            status.write(
+                "Gemini response received."
+            )
+
+
+            # -------------------------------------------------
+            # GET IMAGE
+            # -------------------------------------------------
+
+            output_image = getattr(
+                response,
+                "output_image",
                 None,
             )
 
-            if output_text:
 
-                st.write(
-                    "API response:"
+            if output_image is None:
+
+                status.update(
+                    label="❌ No image returned",
+                    state="error",
                 )
 
-                st.write(
-                    output_text
+                output_text = getattr(
+                    response,
+                    "output_text",
+                    None,
                 )
 
-            else:
+                if output_text:
+                    st.write(output_text)
 
-                st.write(
-                    "Raw response:"
+                else:
+                    st.write(response)
+
+                st.stop()
+
+
+            if not output_image.data:
+
+                status.update(
+                    label="❌ Empty image response",
+                    state="error",
                 )
 
-                st.write(
-                    interaction
-                )
-
-            st.stop()
+                st.stop()
 
 
-        # -------------------------------------------------
-        # CHECK IMAGE DATA
-        # -------------------------------------------------
+            # -------------------------------------------------
+            # DECODE BASE64 IMAGE
+            # -------------------------------------------------
 
-        if not getattr(
-            output,
-            "data",
-            None,
-        ):
+            status.write(
+                "Processing generated image..."
+            )
+
+            image_bytes = base64.b64decode(
+                output_image.data
+            )
+
+
+            # -------------------------------------------------
+            # CREATE PIL IMAGE
+            # -------------------------------------------------
+
+            image = Image.open(
+                BytesIO(image_bytes)
+            ).convert("RGB")
+
+
+            # -------------------------------------------------
+            # SAVE IMAGE IN SESSION
+            # -------------------------------------------------
+
+            st.session_state[
+                "generated_image"
+            ] = image
+
 
             status.update(
-                label="❌ Image data is empty",
+                label="✅ Image generated successfully!",
+                state="complete",
+            )
+
+
+        except Exception as e:
+
+            status.update(
+                label="❌ Generation failed",
                 state="error",
             )
 
             st.error(
-                "The API returned an empty image."
+                f"{type(e).__name__}: {e}"
             )
-
-            st.stop()
-
-
-        # -------------------------------------------------
-        # STEP 4
-        # -------------------------------------------------
-
-        status.write(
-            "✅ Image data received."
-        )
-
-        status.write(
-            "⏳ Decoding image..."
-        )
-
-
-        # -------------------------------------------------
-        # BASE64 → BYTES
-        # -------------------------------------------------
-
-        raw = base64.b64decode(
-            output.data
-        )
-
-
-        # -------------------------------------------------
-        # BYTES → PIL IMAGE
-        # -------------------------------------------------
-
-        image = Image.open(
-            BytesIO(raw)
-        ).convert("RGB")
-
-
-        # -------------------------------------------------
-        # STEP 5
-        # -------------------------------------------------
-
-        status.write(
-            "✅ Image decoded successfully."
-        )
-
-
-        # -------------------------------------------------
-        # SAVE IN SESSION
-        # -------------------------------------------------
-
-        st.session_state[
-            "generated_image"
-        ] = image
-
-
-        # -------------------------------------------------
-        # COMPLETE
-        # -------------------------------------------------
-
-        status.update(
-            label="🎉 Image generated successfully!",
-            state="complete",
-        )
-
-
-    # =====================================================
-    # ERROR HANDLING
-    # =====================================================
-
-    except Exception as e:
-
-        status.update(
-            label="❌ Image generation failed",
-            state="error",
-        )
-
-        st.error(
-            f"Error type: {type(e).__name__}"
-        )
-
-        st.error(
-            f"Error message: {e}"
-        )
 
 
 # =========================================================
-# DISPLAY GENERATED IMAGE
+# DISPLAY IMAGE
 # =========================================================
 
 if "generated_image" in st.session_state:
@@ -374,11 +297,13 @@ if "generated_image" in st.session_state:
         "generated_image"
     ]
 
+
     st.divider()
 
     st.subheader(
         "🖼️ Generated Image"
     )
+
 
     st.image(
         image,
@@ -390,18 +315,20 @@ if "generated_image" in st.session_state:
     # DOWNLOAD
     # =====================================================
 
-    buffer = BytesIO()
+    download_buffer = BytesIO()
 
     image.save(
-        buffer,
+        download_buffer,
         format="JPEG",
         quality=95,
     )
 
+
     st.download_button(
         label="⬇️ Download Image",
-        data=buffer.getvalue(),
+        data=download_buffer.getvalue(),
         file_name="generated_image.jpg",
         mime="image/jpeg",
         use_container_width=True,
     )
+
